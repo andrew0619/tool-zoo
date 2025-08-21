@@ -112,12 +112,20 @@ export default function Home() {
           <p className="text-blue-100 mb-6">
             加入數百位AI創業者的行列，使用Tool Zoo加速你的產品開發
           </p>
-          <Link 
-            href="/signup" 
-            className="bg-white text-blue-600 px-8 py-3 rounded-md text-lg font-medium hover:bg-gray-100"
-          >
-            立即開始
-          </Link>
+          <div className="flex justify-center space-x-4">
+            <Link 
+              href="/features" 
+              className="bg-white text-blue-600 px-8 py-3 rounded-md text-lg font-medium hover:bg-gray-100"
+            >
+              開始使用
+            </Link>
+            <Link 
+              href="/pricing" 
+              className="border border-white text-white px-8 py-3 rounded-md text-lg font-medium hover:bg-blue-700"
+            >
+              查看定價
+            </Link>
+          </div>
         </div>
       </main>
 

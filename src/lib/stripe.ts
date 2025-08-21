@@ -8,7 +8,7 @@ export const stripePromise = loadStripe(stripePublishableKey)
 export const STRIPE_PRODUCTS = {
   PRO: {
     name: 'Tool Zoo Pro',
-    priceId: 'price_pro_monthly', // 需要替換為實際的Stripe Price ID
+    priceId: 'price_1RyPXxE5JO4XTFelzMjNHwbj1o1j9Dc66Lwlb4UnCCry3Yw8gh0F3hrYvTHNSJvguNUOSiD94J49RKg96nF46Zq700CVJklwxO', // 實際的 Stripe Price ID
     features: [
       'Entitlements Sandbox',
       'JSON-AI Salvage Kit',
@@ -18,7 +18,7 @@ export const STRIPE_PRODUCTS = {
   },
   ENTERPRISE: {
     name: 'Tool Zoo Enterprise',
-    priceId: 'price_enterprise_monthly', // 需要替換為實際的Stripe Price ID
+    priceId: 'price_1RyPXxE5JO4XTFelWM1SWoUVWaVm7GYGCGaz4iL79l56JByp4RaCRxNl81no8B5B5scP6zLMKZEuamrwi43TX6JO00e0LQpvPk', // 實際的 Stripe Price ID
     features: [
       '所有Pro功能',
       '客製化開發',
