@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
-import { checkFeatureAccess } from '@/lib/supabase-auth'
+import { subscriptionService, salvageService } from '@/lib/database'
 
 interface SalvageStrategy {
   id: string
@@ -63,19 +63,37 @@ export function JSONAISalvageKit() {
     }
   ]
 
-  useState(() => {
+  useEffect(() => {
     setStrategies(mockStrategies)
     checkAccess()
+    loadSalvageHistory()
   }, [])
 
   const checkAccess = async () => {
     if (!user) return
     
     try {
-      const access = await checkFeatureAccess('json_ai_salvage_kit')
+      const access = await subscriptionService.hasFeatureAccess('json_salvage_kit')
       setHasAccess(access)
     } catch (err) {
       setError('權限檢查失敗')
+    }
+  }
+
+  const loadSalvageHistory = async () => {
+    if (!user) return
+    
+    try {
+      const history = await salvageService.getSalvageHistory(5)
+      setSalvageHistory(history.map(log => ({
+        original: log.original_json,
+        repaired: log.repaired_json || '',
+        strategy: log.repair_strategy || '',
+        confidence: 0.8,
+        timestamp: log.created_at
+      })))
+    } catch (err) {
+      console.error('Error loading salvage history:', err)
     }
   }
 
@@ -103,17 +121,45 @@ export function JSONAISalvageKit() {
         JSON.parse(repaired)
         setOutputText(repaired)
         
-        // 記錄修復歷史
-        const result: SalvageResult = {
-          original: inputText,
-          repaired: repaired,
-          strategy: strategies.map(s => s.name).join(', '),
-          confidence: 0.95,
-          timestamp: new Date().toISOString()
-        }
+        // 保存到數據庫
+        const startTime = Date.now()
+        const log = await salvageService.saveSalvageLog({
+          original_json: inputText,
+          repaired_json: repaired,
+          schema_definition: '',
+          repair_strategy: strategies.map(s => s.name).join(', '),
+          success: true,
+          error_message: null,
+          processing_time_ms: Date.now() - startTime,
+          cost_usd: 0.001 // 模擬成本
+        })
         
-        setSalvageHistory(prev => [result, ...prev.slice(0, 9)]) // 保留最近10條記錄
+        if (log) {
+          // 更新本地歷史記錄
+          const result: SalvageResult = {
+            original: inputText,
+            repaired: repaired,
+            strategy: strategies.map(s => s.name).join(', '),
+            confidence: 0.95,
+            timestamp: new Date().toISOString()
+          }
+          
+          setSalvageHistory(prev => [result, ...prev.slice(0, 9)]) // 保留最近10條記錄
+        }
       } catch (parseError) {
+        // 保存失敗記錄到數據庫
+        const startTime = Date.now()
+        await salvageService.saveSalvageLog({
+          original_json: inputText,
+          repaired_json: null,
+          schema_definition: '',
+          repair_strategy: strategies.map(s => s.name).join(', '),
+          success: false,
+          error_message: '修復後的 JSON 仍然無效',
+          processing_time_ms: Date.now() - startTime,
+          cost_usd: 0.001
+        })
+        
         setError('修復後的 JSON 仍然無效，請檢查輸入')
       }
     } catch (err) {

@@ -26,10 +26,52 @@ export const FeatureSchema = z.object({
   id: z.string(),
   name: z.string(),
   description: z.string(),
-  required_subscription: z.enum(['free', 'pro', 'enterprise'])
+  required_tier: z.enum(['free', 'pro', 'enterprise'])
 })
 
 export type Feature = z.infer<typeof FeatureSchema>
+
+// 用戶功能訪問類型
+export const UserFeatureSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  feature_id: z.string(),
+  is_active: z.boolean(),
+  created_at: z.string()
+})
+
+export type UserFeature = z.infer<typeof UserFeatureSchema>
+
+// 管道指標類型
+export const PipelineMetricSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  pipeline_name: z.string(),
+  metric_name: z.string(),
+  metric_value: z.number(),
+  metric_unit: z.string().optional(),
+  timestamp: z.string(),
+  metadata: z.any().optional()
+})
+
+export type PipelineMetric = z.infer<typeof PipelineMetricSchema>
+
+// 修復日誌類型
+export const SalvageLogSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  original_json: z.string(),
+  repaired_json: z.string().nullable(),
+  schema_definition: z.string().optional(),
+  repair_strategy: z.string(),
+  success: z.boolean(),
+  error_message: z.string().nullable(),
+  processing_time_ms: z.number(),
+  cost_usd: z.number(),
+  created_at: z.string()
+})
+
+export type SalvageLog = z.infer<typeof SalvageLogSchema>
 
 // JSON修復相關類型
 export const SalvageStrategySchema = z.object({

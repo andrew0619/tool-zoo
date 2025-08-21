@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
-import { checkFeatureAccess } from '@/lib/supabase-auth'
+import { subscriptionService, entitlementsService } from '@/lib/database'
 
 interface Entitlement {
   id: string
@@ -39,7 +39,7 @@ export function EntitlementsSandbox() {
     if (!user) return
     
     try {
-      const access = await checkFeatureAccess('entitlements_sandbox')
+      const access = await subscriptionService.hasFeatureAccess('entitlements_sandbox')
       setHasAccess(access)
       
       if (access) {
@@ -53,44 +53,16 @@ export function EntitlementsSandbox() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // TODO: 從 Supabase 加載數據
-      // 這裡先使用模擬數據
-      const mockEntitlements: Entitlement[] = [
-        {
-          id: '1',
-          name: '讀取用戶資料',
-          description: '允許讀取用戶基本資料',
-          resource: 'users',
-          action: 'read',
-          tenant_id: 'tenant1',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: '2',
-          name: '創建訂單',
-          description: '允許創建新的訂單',
-          resource: 'orders',
-          action: 'create',
-          tenant_id: 'tenant1',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }
-      ]
+      // 從數據庫加載真實數據
+      const [entitlementsData, tenantsData] = await Promise.all([
+        entitlementsService.getEntitlements(),
+        entitlementsService.getTenants()
+      ])
 
-      const mockTenants: Tenant[] = [
-        {
-          id: 'tenant1',
-          name: '示例租戶',
-          domain: 'example.com',
-          status: 'active',
-          created_at: new Date().toISOString()
-        }
-      ]
-
-      setEntitlements(mockEntitlements)
-      setTenants(mockTenants)
+      setEntitlements(entitlementsData)
+      setTenants(tenantsData)
     } catch (err) {
+      console.error('Error loading data:', err)
       setError('數據加載失敗')
     } finally {
       setLoading(false)
