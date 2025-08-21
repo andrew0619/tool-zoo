@@ -51,10 +51,10 @@ export default function Home() {
           </p>
           <div className="mt-10 flex justify-center space-x-4">
             <Link 
-              href="/demo" 
+              href="/pricing" 
               className="bg-blue-600 text-white px-8 py-3 rounded-md text-lg font-medium hover:bg-blue-700"
             >
-              免費試用
+              查看定價
             </Link>
             <Link 
               href="/docs" 
