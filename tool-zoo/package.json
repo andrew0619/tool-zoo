@@ -1,0 +1,34 @@
+{
+  "name": "tool-zoo",
+  "version": "0.1.0",
+  "description": "AI創業者的一盒化解決方案 - 單人友好、意見強、開箱有SLO與E2E、內含前/後對照Dashboard",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "@stripe/stripe-js": "^2.4.0",
+    "@tanstack/react-query": "^5.17.0",
+    "zod": "^3.22.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "next": "15.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^9.15.0",
+    "eslint-config-next": "15.2.4",
+    "postcss": "^8.5.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.5.0"
+  }
+}
