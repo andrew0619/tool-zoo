@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { Database } from './types'
+import { handleSupabaseError, createAppError } from './error-handler'
 
 // 類型定義
 export type User = Database['public']['Tables']['users']['Row']
@@ -23,7 +24,8 @@ export const userService = {
       .single()
 
     if (error) {
-      console.error('Error fetching user:', error)
+      const appError = handleSupabaseError(error)
+      console.error('Error fetching user:', appError)
       return null
     }
 
@@ -43,7 +45,8 @@ export const userService = {
       .single()
 
     if (error) {
-      console.error('Error updating user:', error)
+      const appError = handleSupabaseError(error)
+      console.error('Error updating user:', appError)
       return null
     }
 

@@ -2,27 +2,44 @@
 
 import { useState } from 'react'
 import { signIn } from '@/lib/supabase-auth'
+import { SignInSchema } from '@/lib/types'
+import { useFormValidation } from '@/hooks/useFormValidation'
+import { ErrorMessage } from '@/components/ui/ErrorMessage'
+import { handleSupabaseError, createAppError } from '@/lib/error-handler'
 
 export function SignInForm() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [appError, setAppError] = useState<any>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    try {
-      await signIn(email, password)
-      // 登入成功後會自動重定向或更新狀態
-    } catch (error: any) {
-      setError(error.message || '登入失敗')
-    } finally {
-      setLoading(false)
+  const {
+    values,
+    errors,
+    touched,
+    isValid,
+    isSubmitting,
+    setFieldValue,
+    setFieldTouched,
+    handleSubmit
+  } = useFormValidation({
+    schema: SignInSchema,
+    initialValues: {
+      email: '',
+      password: ''
+    },
+    onSubmit: async (values) => {
+      try {
+        await signIn(values.email, values.password)
+        // 登入成功後會自動重定向或更新狀態
+      } catch (error: any) {
+        const appError = handleSupabaseError(error)
+        setAppError(appError)
+        throw appError
+      }
+    },
+    onError: (validationErrors) => {
+      const error = createAppError('VALIDATION_ERROR', '請檢查輸入的資料')
+      setAppError(error)
     }
-  }
+  })
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -50,10 +67,15 @@ export function SignInForm() {
                 type="email"
                 autoComplete="email"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm ${
+                  touched.email && errors.email 
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                    : 'border-gray-300'
+                }`}
                 placeholder="電子郵件"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={values.email}
+                onChange={(e) => setFieldValue('email', e.target.value)}
+                onBlur={() => setFieldTouched('email', true)}
               />
             </div>
             <div>
@@ -66,27 +88,45 @@ export function SignInForm() {
                 type="password"
                 autoComplete="current-password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                className={`appearance-none rounded-none relative block w-full px-3 py-2 border placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm ${
+                  touched.password && errors.password 
+                    ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
+                    : 'border-gray-300'
+                }`}
                 placeholder="密碼"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={values.password}
+                onChange={(e) => setFieldValue('password', e.target.value)}
+                onBlur={() => setFieldTouched('password', true)}
               />
             </div>
           </div>
 
-          {error && (
+          {/* 字段錯誤提示 */}
+          {touched.email && errors.email && (
             <div className="text-red-600 text-sm text-center">
-              {error}
+              {errors.email}
             </div>
           )}
+          {touched.password && errors.password && (
+            <div className="text-red-600 text-sm text-center">
+              {errors.password}
+            </div>
+          )}
+
+          {/* 應用錯誤提示 */}
+          <ErrorMessage 
+            error={appError} 
+            onDismiss={() => setAppError(null)}
+            autoDismiss={false}
+          />
 
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting || !isValid}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? '登入中...' : '登入'}
+              {isSubmitting ? '登入中...' : '登入'}
             </button>
           </div>
 
