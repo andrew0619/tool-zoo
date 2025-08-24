@@ -25,6 +25,13 @@ const features = [
     href: '/features/dashboard',
     icon: '📊',
     color: 'bg-purple-500'
+  },
+  {
+    name: '個人財務追蹤',
+    description: '每日支出記錄和損益表',
+    href: '/finance',
+    icon: '💰',
+    color: 'bg-yellow-500'
   }
 ]
 

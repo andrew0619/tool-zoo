@@ -124,14 +124,7 @@ export const PipelineConfigSchema = z.object({
   retryCount: z.number().min(0).max(10, '重試次數不能超過10次')
 })
 
-// JSON修復相關類型
-export const SalvageStrategySchema = z.object({
-  level: z.enum(['basic', 'advanced', 'expert']),
-  maxRetries: z.number().min(1).max(10),
-  costLimit: z.number().min(0)
-})
 
-export type SalvageStrategy = z.infer<typeof SalvageStrategySchema>
 
 // 監控相關類型
 export const MetricsSchema = z.object({
@@ -151,3 +144,91 @@ export const ApiResponseSchema = z.object({
 })
 
 export type ApiResponse = z.infer<typeof ApiResponseSchema>
+
+// 技術健康檢查相關類型
+export const HealthStatusSchema = z.enum([
+  'excellent',
+  'good', 
+  'warning',
+  'critical',
+  'unknown'
+])
+
+export const HealthCategorySchema = z.enum([
+  'performance',
+  'security',
+  'reliability',
+  'maintainability',
+  'scalability',
+  'testing',
+  'documentation',
+  'dependencies',
+  'infrastructure',
+  'monitoring'
+])
+
+export const HealthMetricSchema = z.object({
+  name: z.string(),
+  category: HealthCategorySchema,
+  status: HealthStatusSchema,
+  score: z.number().min(0).max(100),
+  value: z.union([z.string(), z.number(), z.boolean()]),
+  threshold: z.object({
+    excellent: z.number().optional(),
+    good: z.number().optional(),
+    warning: z.number().optional(),
+    critical: z.number().optional()
+  }).optional(),
+  description: z.string(),
+  recommendation: z.string().optional(),
+  lastChecked: z.string(),
+  trend: z.enum(['improving', 'stable', 'degrading', 'unknown']).optional()
+})
+
+export const HealthIssueSchema = z.object({
+  id: z.string(),
+  category: HealthCategorySchema,
+  severity: z.enum(['low', 'medium', 'high', 'critical']),
+  title: z.string(),
+  description: z.string(),
+  recommendation: z.string(),
+  file: z.string().optional(),
+  line: z.number().optional(),
+  autoFixable: z.boolean().default(false),
+  estimatedEffort: z.enum(['low', 'medium', 'high']).optional()
+})
+
+export const HealthReportSchema = z.object({
+  projectId: z.string(),
+  timestamp: z.string(),
+  overallScore: z.number().min(0).max(100),
+  overallStatus: HealthStatusSchema,
+  categories: z.record(HealthCategorySchema, z.object({
+    score: z.number().min(0).max(100),
+    status: HealthStatusSchema,
+    metrics: z.array(HealthMetricSchema)
+  })),
+  issues: z.array(HealthIssueSchema),
+  recommendations: z.array(z.string()),
+  summary: z.object({
+    totalMetrics: z.number(),
+    passedMetrics: z.number(),
+    warningMetrics: z.number(),
+    criticalMetrics: z.number(),
+    totalIssues: z.number(),
+    criticalIssues: z.number(),
+    autoFixableIssues: z.number()
+  }),
+  trends: z.object({
+    scoreChange: z.number().optional(),
+    previousScore: z.number().optional(),
+    improvingMetrics: z.number().default(0),
+    degradingMetrics: z.number().default(0)
+  }).optional()
+})
+
+export type HealthStatus = z.infer<typeof HealthStatusSchema>
+export type HealthCategory = z.infer<typeof HealthCategorySchema>
+export type HealthMetric = z.infer<typeof HealthMetricSchema>
+export type HealthIssue = z.infer<typeof HealthIssueSchema>
+export type HealthReport = z.infer<typeof HealthReportSchema>

@@ -24,7 +24,7 @@ export function SignUpForm() {
         // 註冊成功，重定向到登入頁面
         router.push('/login?message=Please check your email to confirm your account')
       }
-    } catch (err) {
+    } catch {
       setError('註冊失敗，請稍後再試')
     } finally {
       setLoading(false)

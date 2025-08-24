@@ -37,12 +37,14 @@ export function useFormValidation<T extends Record<string, any>>({
   const validateField = useCallback((field: keyof T, value: any): string => {
     try {
       // 創建部分 schema 來驗證單個字段
-      const fieldSchema = z.object({ [field]: schema.shape[field] })
+      const baseSchema = (schema as any)._def?.schema || schema;
+      const fieldSchema = z.object({ [field]: baseSchema._def.shape()[field] })
       fieldSchema.parse({ [field]: value })
       return ''
     } catch (error) {
       if (error instanceof ZodError) {
-        const fieldError = error.errors.find(e => e.path.includes(field as string))
+        // 查找對應字段的錯誤
+        const fieldError = error.errors.find(e => e.path[0] === field)
         return fieldError?.message || ''
       }
       return ''
@@ -169,7 +171,7 @@ export function useFormValidation<T extends Record<string, any>>({
     } finally {
       setState(prev => ({ ...prev, isSubmitting: false }))
     }
-  }, [state.values, validateForm, isValid, onSubmit, onError])
+  }, [state.values, validateForm, onSubmit, onError])
 
   // 重置表單
   const resetForm = useCallback(() => {

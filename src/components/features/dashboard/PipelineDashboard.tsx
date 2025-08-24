@@ -3,34 +3,15 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { subscriptionService, pipelineService } from '@/lib/database'
+import { 
+  pipelineMonitoringService, 
+  useRealTimeMetrics,
+  PipelineMetric,
+  PipelineConfig,
+  PipelineAlert 
+} from '@/lib/pipeline-monitoring'
 
-interface PipelineMetric {
-  id: string
-  name: string
-  status: 'running' | 'completed' | 'failed' | 'pending'
-  progress: number
-  start_time: string
-  end_time?: string
-  duration?: number
-  success_rate: number
-  total_requests: number
-  successful_requests: number
-  failed_requests: number
-  avg_response_time: number
-}
-
-interface PipelineConfig {
-  id: string
-  name: string
-  description: string
-  model: string
-  endpoint: string
-  rate_limit: number
-  timeout: number
-  retry_count: number
-  created_at: string
-  updated_at: string
-}
+// 接口定義已移至 pipeline-monitoring.ts
 
 export function PipelineDashboard() {
   const { user, profile } = useAuth()
@@ -40,10 +21,23 @@ export function PipelineDashboard() {
   const [error, setError] = useState('')
   const [hasAccess, setHasAccess] = useState(false)
   const [selectedPipeline, setSelectedPipeline] = useState<string | null>(null)
+  const [activeAlerts, setActiveAlerts] = useState<PipelineAlert[]>([])
+  const [costAnalysis, setCostAnalysis] = useState<any>(null)
+  const [userExperience, setUserExperience] = useState<any>(null)
+  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h')
+  
+  // 使用實時監控 Hook
+  const { metrics: realTimeMetrics, loading: metricsLoading, error: metricsError } = useRealTimeMetrics(5000)
 
   useEffect(() => {
     checkAccess()
   }, [user])
+
+  useEffect(() => {
+    if (hasAccess) {
+      loadData()
+    }
+  }, [hasAccess, timeRange, selectedPipeline])
 
   const checkAccess = async () => {
     if (!user) return
@@ -63,55 +57,71 @@ export function PipelineDashboard() {
   const loadData = async () => {
     setLoading(true)
     try {
-      // 從數據庫加載真實數據
-      const [metricsData, statsData] = await Promise.all([
-        pipelineService.getPipelineMetrics(),
-        pipelineService.getPipelineStats()
+      // 使用新的監控服務加載數據
+      const [pipelineMetrics, costData, uxData, alerts] = await Promise.all([
+        pipelineMonitoringService.getPipelineMetrics(selectedPipeline || undefined, timeRange),
+        pipelineMonitoringService.getCostAnalysis(timeRange === '1h' ? '24h' : timeRange),
+        pipelineMonitoringService.getUserExperienceMetrics(),
+        pipelineMonitoringService.getActiveAlerts()
       ])
 
-      // 轉換數據格式以匹配組件期望的結構
-      const pipelinesData = metricsData.map((metric, index) => ({
-        id: metric.id,
-        name: metric.pipeline_name,
-        status: 'running', // 從 metric_value 或其他字段推斷
-        progress: Math.min(100, Math.max(0, Number(metric.metric_value))),
-        start_time: metric.timestamp,
-        success_rate: 0.95, // 從統計數據計算
-        total_requests: statsData.totalMetrics,
-        successful_requests: Math.floor(statsData.totalMetrics * 0.95),
-        failed_requests: Math.floor(statsData.totalMetrics * 0.05),
-        avg_response_time: statsData.averageLatency
-      }))
+      setPipelines(pipelineMetrics)
+      setCostAnalysis(costData)
+      setUserExperience(uxData)
+      setActiveAlerts(alerts)
 
-      // 模擬配置數據 (暫時保留，後續可以擴展數據庫結構)
+      // 模擬配置數據 (可以後續從數據庫加載)
       const mockConfigs: PipelineConfig[] = [
         {
           id: '1',
-          name: 'GPT-4 配置',
-          description: '用於文本生成的 GPT-4 管道配置',
+          name: 'GPT-4 生產配置',
+          description: '用於生產環境的 GPT-4 管道配置',
           model: 'gpt-4',
           endpoint: 'https://api.openai.com/v1/chat/completions',
-          rate_limit: 100,
-          timeout: 30,
-          retry_count: 3,
+          maxTokens: 4096,
+          temperature: 0.7,
+          rateLimit: 100,
+          timeout: 30000,
+          retryCount: 3,
+          alertThresholds: {
+            errorRate: 5,
+            responseTime: 1000,
+            cost: 100
+          },
+          slo: {
+            availability: 99.9,
+            responseTime: 500,
+            errorRate: 1
+          },
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         },
         {
           id: '2',
-          name: 'Claude 配置',
+          name: 'Claude 對話配置',
           description: '用於對話處理的 Claude 管道配置',
           model: 'claude-3-sonnet',
           endpoint: 'https://api.anthropic.com/v1/messages',
-          rate_limit: 50,
-          timeout: 60,
-          retry_count: 2,
+          maxTokens: 8192,
+          temperature: 0.5,
+          rateLimit: 50,
+          timeout: 60000,
+          retryCount: 2,
+          alertThresholds: {
+            errorRate: 3,
+            responseTime: 2000,
+            cost: 50
+          },
+          slo: {
+            availability: 99.5,
+            responseTime: 1000,
+            errorRate: 2
+          },
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
       ]
 
-      setPipelines(pipelinesData)
       setConfigs(mockConfigs)
     } catch (err) {
       console.error('Error loading data:', err)

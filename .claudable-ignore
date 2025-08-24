@@ -1,0 +1,36 @@
+# Claudable 保護文件 - 禁止 AI 修改的文件和目錄
+
+# 後端邏輯和 API
+src/lib/
+src/api/
+src/types/
+src/utils/
+src/services/
+
+# 配置文件
+package.json
+package-lock.json
+next.config.js
+tailwind.config.js
+tsconfig.json
+.eslintrc.json
+.env*
+
+# 數據庫和狀態管理
+src/store/
+src/db/
+src/models/
+
+# 測試文件
+__tests__/
+*.test.*
+*.spec.*
+
+# 文檔和腳本
+docs/
+scripts/
+.github/
+
+# 其他重要文件
+README.md
+.gitignore

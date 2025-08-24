@@ -3,16 +3,13 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { subscriptionService, salvageService } from '@/lib/database'
-
-interface SalvageStrategy {
-  id: string
-  name: string
-  description: string
-  pattern: string
-  replacement: string
-  priority: number
-  created_at: string
-}
+import { 
+  smartSalvageJSON, 
+  getAvailableStrategies, 
+  analyzeErrorHotspots,
+  SalvageStrategy,
+  SalvageResult as SmartSalvageResult
+} from '@/lib/json-salvage-strategies'
 
 interface SalvageResult {
   original: string
@@ -20,6 +17,15 @@ interface SalvageResult {
   strategy: string
   confidence: number
   timestamp: string
+  cost?: number
+  processingTime?: number
+  appliedStrategies?: string[]
+  errorHotspots?: Array<{
+    line: number
+    column: number
+    error: string
+    suggestion: string
+  }>
 }
 
 export function JSONAISalvageKit() {
@@ -31,43 +37,42 @@ export function JSONAISalvageKit() {
   const [hasAccess, setHasAccess] = useState(false)
   const [salvageHistory, setSalvageHistory] = useState<SalvageResult[]>([])
   const [strategies, setStrategies] = useState<SalvageStrategy[]>([])
-
-  // 模擬的修復策略
-  const mockStrategies: SalvageStrategy[] = [
-    {
-      id: '1',
-      name: '修復缺少引號的鍵',
-      description: '修復 JSON 中缺少引號的鍵名',
-      pattern: '([{,]\\s*)([a-zA-Z_][a-zA-Z0-9_]*)\\s*:',
-      replacement: '$1"$2":',
-      priority: 1,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: '2',
-      name: '修復尾隨逗號',
-      description: '移除 JSON 對象和數組中的尾隨逗號',
-      pattern: ',\\s*([}\]])',
-      replacement: '$1',
-      priority: 2,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: '3',
-      name: '修復單引號',
-      description: '將單引號替換為雙引號',
-      pattern: "'([^']*)'",
-      replacement: '"$1"',
-      priority: 3,
-      created_at: new Date().toISOString()
-    }
-  ]
+  const [userTier, setUserTier] = useState<'free' | 'pro' | 'enterprise'>('free')
+  const [errorHotspots, setErrorHotspots] = useState<Array<{
+    line: number
+    column: number
+    error: string
+    suggestion: string
+  }>>([])
+  const [costEstimate, setCostEstimate] = useState(0)
 
   useEffect(() => {
-    setStrategies(mockStrategies)
     checkAccess()
     loadSalvageHistory()
-  }, [])
+    loadUserTier()
+  }, [user])
+
+  const loadUserTier = async () => {
+    if (!user) return
+    
+    try {
+      const subscription = await subscriptionService.getUserSubscription()
+      if (subscription?.status === 'active') {
+        // 根據訂閱類型確定等級 - 這裡簡化為 pro
+        setUserTier('pro')
+      } else {
+        setUserTier('free')
+      }
+      
+      // 載入可用策略
+      const availableStrategies = getAvailableStrategies(userTier)
+      setStrategies(availableStrategies)
+    } catch (err) {
+      console.error('Error loading user tier:', err)
+      setUserTier('free')
+      setStrategies(getAvailableStrategies('free'))
+    }
+  }
 
   const checkAccess = async () => {
     if (!user) return
@@ -107,62 +112,51 @@ export function JSONAISalvageKit() {
     setError('')
 
     try {
-      // 模擬修復過程
-      let repaired = inputText
+      // 分析錯誤熱點
+      const hotspots = analyzeErrorHotspots(inputText)
+      setErrorHotspots(hotspots)
 
-      // 應用修復策略
-      for (const strategy of strategies.sort((a, b) => a.priority - b.priority)) {
-        const regex = new RegExp(strategy.pattern, 'g')
-        repaired = repaired.replace(regex, strategy.replacement)
+      // 使用智能修復系統
+      const maxCost = userTier === 'free' ? 0 : userTier === 'pro' ? 0.05 : 0.20
+      const salvageResult = await smartSalvageJSON(inputText, userTier, maxCost)
+      
+      setOutputText(salvageResult.repaired)
+      setCostEstimate(salvageResult.cost)
+      
+      // 保存到數據庫
+      const log = await salvageService.saveSalvageLog({
+        original_json: inputText,
+        repaired_json: salvageResult.success ? salvageResult.repaired : null,
+        schema_definition: '',
+        repair_strategy: salvageResult.appliedStrategies.join(', '),
+        success: salvageResult.success,
+        error_message: salvageResult.errorMessage || null,
+        processing_time_ms: salvageResult.processingTime,
+        cost_usd: salvageResult.cost
+      })
+      
+      if (log) {
+        // 更新本地歷史記錄
+        const result: SalvageResult = {
+          original: inputText,
+          repaired: salvageResult.repaired,
+          strategy: salvageResult.appliedStrategies.join(', '),
+          confidence: salvageResult.confidence,
+          timestamp: new Date().toISOString(),
+          cost: salvageResult.cost,
+          processingTime: salvageResult.processingTime,
+          appliedStrategies: salvageResult.appliedStrategies,
+          errorHotspots: hotspots
+        }
+        
+        setSalvageHistory(prev => [result, ...prev.slice(0, 9)]) // 保留最近10條記錄
       }
 
-      // 嘗試解析 JSON 以驗證修復結果
-      try {
-        JSON.parse(repaired)
-        setOutputText(repaired)
-        
-        // 保存到數據庫
-        const startTime = Date.now()
-        const log = await salvageService.saveSalvageLog({
-          original_json: inputText,
-          repaired_json: repaired,
-          schema_definition: '',
-          repair_strategy: strategies.map(s => s.name).join(', '),
-          success: true,
-          error_message: null,
-          processing_time_ms: Date.now() - startTime,
-          cost_usd: 0.001 // 模擬成本
-        })
-        
-        if (log) {
-          // 更新本地歷史記錄
-          const result: SalvageResult = {
-            original: inputText,
-            repaired: repaired,
-            strategy: strategies.map(s => s.name).join(', '),
-            confidence: 0.95,
-            timestamp: new Date().toISOString()
-          }
-          
-          setSalvageHistory(prev => [result, ...prev.slice(0, 9)]) // 保留最近10條記錄
-        }
-      } catch (parseError) {
-        // 保存失敗記錄到數據庫
-        const startTime = Date.now()
-        await salvageService.saveSalvageLog({
-          original_json: inputText,
-          repaired_json: null,
-          schema_definition: '',
-          repair_strategy: strategies.map(s => s.name).join(', '),
-          success: false,
-          error_message: '修復後的 JSON 仍然無效',
-          processing_time_ms: Date.now() - startTime,
-          cost_usd: 0.001
-        })
-        
-        setError('修復後的 JSON 仍然無效，請檢查輸入')
+      if (!salvageResult.success) {
+        setError(salvageResult.errorMessage || '修復失敗，請檢查輸入')
       }
     } catch (err) {
+      console.error('Salvage error:', err)
       setError('修復過程失敗')
     } finally {
       setLoading(false)
@@ -215,6 +209,25 @@ export function JSONAISalvageKit() {
           </div>
         )}
 
+        {/* 用戶等級和成本信息 */}
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-md p-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-sm font-medium text-blue-900">當前等級: {userTier.toUpperCase()}</h3>
+              <p className="text-sm text-blue-700">
+                可用策略: {strategies.length} 個 | 
+                最大成本: ${userTier === 'free' ? '0.00' : userTier === 'pro' ? '0.05' : '0.20'}
+              </p>
+            </div>
+            {costEstimate > 0 && (
+              <div className="text-right">
+                <p className="text-sm text-blue-900">預估成本</p>
+                <p className="text-lg font-bold text-blue-700">${costEstimate.toFixed(4)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 輸入區域 */}
           <div className="bg-white rounded-lg shadow">
@@ -224,10 +237,37 @@ export function JSONAISalvageKit() {
             <div className="p-6">
               <textarea
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={(e) => {
+                  setInputText(e.target.value)
+                  // 實時分析錯誤熱點
+                  if (e.target.value.trim()) {
+                    const hotspots = analyzeErrorHotspots(e.target.value)
+                    setErrorHotspots(hotspots)
+                  } else {
+                    setErrorHotspots([])
+                  }
+                }}
                 placeholder="請輸入需要修復的 JSON 文本..."
-                className="w-full h-64 p-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className="w-full h-64 p-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm"
               />
+              
+              {/* 錯誤熱點顯示 */}
+              {errorHotspots.length > 0 && (
+                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <h4 className="text-sm font-medium text-yellow-800 mb-2">檢測到的問題:</h4>
+                  <div className="space-y-1">
+                    {errorHotspots.slice(0, 3).map((hotspot, index) => (
+                      <div key={index} className="text-sm text-yellow-700">
+                        <span className="font-medium">第 {hotspot.line} 行:</span> {hotspot.error}
+                        <span className="text-yellow-600 ml-2">→ {hotspot.suggestion}</span>
+                      </div>
+                    ))}
+                    {errorHotspots.length > 3 && (
+                      <p className="text-sm text-yellow-600">還有 {errorHotspots.length - 3} 個問題...</p>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="mt-4 flex space-x-4">
                 <button
                   onClick={salvageJSON}
@@ -273,21 +313,87 @@ export function JSONAISalvageKit() {
         {/* 修復策略 */}
         <div className="mt-8 bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">修復策略</h2>
+            <h2 className="text-lg font-medium text-gray-900">可用修復策略</h2>
+            <p className="text-sm text-gray-500 mt-1">根據您的訂閱等級顯示可用策略</p>
           </div>
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {strategies.map(strategy => (
-                <div key={strategy.id} className="border border-gray-200 rounded-md p-4">
-                  <h3 className="text-sm font-medium text-gray-900">{strategy.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1">{strategy.description}</p>
-                  <div className="mt-2">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
-                      優先級: {strategy.priority}
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {strategies.map(strategy => {
+                const getCategoryColor = (category: string) => {
+                  switch (category) {
+                    case 'basic': return 'bg-green-100 text-green-800'
+                    case 'intermediate': return 'bg-blue-100 text-blue-800'
+                    case 'advanced': return 'bg-purple-100 text-purple-800'
+                    case 'ai_powered': return 'bg-red-100 text-red-800'
+                    default: return 'bg-gray-100 text-gray-800'
+                  }
+                }
+                
+                const getCostColor = (costLevel: string) => {
+                  switch (costLevel) {
+                    case 'free': return 'bg-green-50 text-green-700 border-green-200'
+                    case 'low': return 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                    case 'medium': return 'bg-orange-50 text-orange-700 border-orange-200'
+                    case 'high': return 'bg-red-50 text-red-700 border-red-200'
+                    default: return 'bg-gray-50 text-gray-700 border-gray-200'
+                  }
+                }
+
+                return (
+                  <div key={strategy.id} className={`border rounded-md p-4 ${getCostColor(strategy.costLevel)}`}>
+                    <div className="flex justify-between items-start mb-2">
+                      <h3 className="text-sm font-medium text-gray-900">{strategy.name}</h3>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${getCategoryColor(strategy.category)}`}>
+                        {strategy.category}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">{strategy.description}</p>
+                    <div className="flex justify-between items-center">
+                      <div className="flex space-x-2">
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+                          優先級: {strategy.priority}
+                        </span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800">
+                          信心度: {Math.round(strategy.confidence * 100)}%
+                        </span>
+                      </div>
+                      <span className="text-xs font-medium text-gray-500">
+                        {strategy.costLevel === 'free' ? '免費' : strategy.costLevel}
+                      </span>
+                    </div>
                   </div>
+                )
+              })}
+            </div>
+            
+            {/* 策略統計 */}
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div>
+                  <p className="text-2xl font-bold text-green-600">
+                    {strategies.filter(s => s.category === 'basic').length}
+                  </p>
+                  <p className="text-sm text-gray-500">基礎策略</p>
                 </div>
-              ))}
+                <div>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {strategies.filter(s => s.category === 'intermediate').length}
+                  </p>
+                  <p className="text-sm text-gray-500">中級策略</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {strategies.filter(s => s.category === 'advanced').length}
+                  </p>
+                  <p className="text-sm text-gray-500">高級策略</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-red-600">
+                    {strategies.filter(s => s.category === 'ai_powered').length}
+                  </p>
+                  <p className="text-sm text-gray-500">AI 策略</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

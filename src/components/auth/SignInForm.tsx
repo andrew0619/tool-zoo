@@ -8,7 +8,7 @@ import { ErrorMessage } from '@/components/ui/ErrorMessage'
 import { handleSupabaseError, createAppError } from '@/lib/error-handler'
 
 export function SignInForm() {
-  const [appError, setAppError] = useState<any>(null)
+  const [appError, setAppError] = useState<Error | null>(null)
 
   const {
     values,
@@ -29,13 +29,13 @@ export function SignInForm() {
       try {
         await signIn(values.email, values.password)
         // 登入成功後會自動重定向或更新狀態
-      } catch (error: any) {
-        const appError = handleSupabaseError(error)
+      } catch (error: unknown) {
+        const appError = handleSupabaseError(error as Error)
         setAppError(appError)
         throw appError
       }
     },
-    onError: (validationErrors) => {
+    onError: () => {
       const error = createAppError('VALIDATION_ERROR', '請檢查輸入的資料')
       setAppError(error)
     }
